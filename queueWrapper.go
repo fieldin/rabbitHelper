@@ -32,11 +32,12 @@ type QueueWrapper struct {
 }
 
 type queueDefinitions struct {
-	durable    bool
-	autoDelete bool
-	exclusive  bool
-	noWait     bool
-	args       amqp.Table
+	shouldCreate bool
+	durable      bool
+	autoDelete   bool
+	exclusive    bool
+	noWait       bool
+	args         amqp.Table
 }
 
 type exchangeDefinitions struct {
@@ -87,10 +88,11 @@ func NewQueueWrapper(queueName string, opts ...Option) *QueueWrapper {
 
 		queueName: queueName,
 		queueDef: queueDefinitions{
-			durable:    true,
-			autoDelete: false,
-			exclusive:  false,
-			noWait:     false,
+			shouldCreate: true,
+			durable:      true,
+			autoDelete:   false,
+			exclusive:    false,
+			noWait:       false,
 		},
 		exchangeDef: exchangeDefinitions{
 			shouldSet:  false,
@@ -223,6 +225,9 @@ func (q *QueueWrapper) createChannel() error {
 }
 
 func (q *QueueWrapper) makeSureQueueExists() error {
+	if !q.queueDef.shouldCreate {
+		return nil
+	}
 	_, err := q.channel.QueueDeclare(
 		q.queueName,           // queueName
 		q.queueDef.durable,    // durable
