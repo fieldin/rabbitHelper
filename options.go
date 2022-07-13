@@ -30,6 +30,12 @@ func Port(port string) Option {
 	}
 }
 
+func CreateQueue(create bool) Option {
+	return func(q *QueueWrapper) {
+		q.queueDef.shouldCreate = create
+	}
+}
+
 func Queue(durable, autoDelete, exclusive, noWait bool, args amqp.Table) Option {
 	return func(q *QueueWrapper) {
 		q.queueDef = queueDefinitions{
