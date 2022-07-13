@@ -17,18 +17,22 @@ func main() {
 	defer close(interrupt)
 	signal.Notify(interrupt, syscall.SIGTERM, os.Interrupt, os.Kill)
 
+	done := make(chan bool)
+
 	s1 := rand.NewSource(time.Now().UnixNano())
 	r1 := rand.New(s1)
 
-	go consumerLoop(r1.Intn(100))
-	go consumerLoop(r1.Intn(100))
+	go consumerLoop(done, r1.Intn(100))
+	go consumerLoop(done, r1.Intn(100))
 
 	fmt.Println("I have moved on to other stuff")
 	fmt.Println("waiting to CTRL-C")
 	<-interrupt
+	close(done)
+	time.Sleep(50 * time.Millisecond)
 }
 
-func consumerLoop(consumerId int) {
+func consumerLoop(done chan bool, consumerId int) {
 	consumerName := fmt.Sprintf("consumer #%v", consumerId)
 
 	exchange := "cake.dx"
@@ -48,8 +52,17 @@ func consumerLoop(consumerId int) {
 		log.Fatal("failed consuming incoming messages")
 	}
 
-	for rm := range rbt.MessagesChannel {
-		fmt.Println(consumerName, " <- ", string(rm.Body))
-		rm.Ack(true)
+	defer func() {
+		fmt.Println(consumerName, " is closing")
+	}()
+	for {
+		select {
+		case <-done:
+			return
+		case rm := <-rbt.MessagesChannel:
+			fmt.Println(consumerName, " <- ", string(rm.Body))
+			rm.Ack(true)
+		}
 	}
+
 }
