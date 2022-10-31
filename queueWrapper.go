@@ -29,6 +29,7 @@ type QueueWrapper struct {
 	bindDef         bindDefinitions
 	publishDef      publishDefinitions
 	consumeDef      consumeDefinitions
+	deadLetter      deadLetterDefinitions
 }
 
 type queueDefinitions struct {
@@ -73,6 +74,13 @@ type consumeDefinitions struct {
 	exclusive bool
 	noLocal   bool
 	noWait    bool
+}
+
+type deadLetterDefinitions struct {
+	shouldSet bool
+	exchange  string
+	routing   string
+	queue     string
 }
 
 var ErrQueueNotFound = errors.New("queue not found or unexpected definitions")
@@ -125,6 +133,9 @@ func NewQueueWrapper(queueName string, opts ...Option) *QueueWrapper {
 			noLocal:   false,
 			noWait:    false,
 		},
+		deadLetter: deadLetterDefinitions{
+			shouldSet: false,
+		},
 	}
 
 	// apply config options
@@ -151,6 +162,12 @@ func (q *QueueWrapper) Open() error {
 	}
 	if err := q.createChannel(); err != nil {
 		return err
+	}
+
+	if q.deadLetter.shouldSet {
+		if err := q.setupDeadLetter(); err != nil {
+			return err
+		}
 	}
 
 	if q.exchangeDef.shouldSet {
@@ -291,6 +308,51 @@ func (q *QueueWrapper) Publish(msg []byte) error {
 	if err != nil {
 		return ErrPublish
 	}
+	return nil
+}
+
+func (q *QueueWrapper) setupDeadLetter() error {
+	// create the deadletter exchange
+	if err := q.channel.ExchangeDeclare(
+		q.deadLetter.exchange, // queueName
+		"direct",              // type
+		true,                  // durable
+		false,                 // auto-deleted
+		false,                 // internal
+		false,                 // no-wait
+		nil,                   // arguments
+	); err != nil {
+		log.WithError(err).Error("failed to declare dl exchange")
+		return err
+	}
+
+	// create the deadletter queue and bind it to the dl exchange
+	if _, err := q.channel.QueueDeclare(
+		q.deadLetter.queue, // queueName
+		true,               // durable
+		false,              // delete when unused
+		false,              // exclusive
+		false,              // no-wait
+		nil,                // arguments
+	); err != nil {
+		log.WithError(err).Error("failed to declare dl queue")
+		return err
+	}
+	if err := q.channel.QueueBind(
+		q.deadLetter.queue,
+		q.deadLetter.routing,
+		q.deadLetter.exchange,
+		false,
+		nil,
+	); err != nil {
+		return err
+	}
+
+	// add the x-dead-letter-exchange arg to the original queue
+	if q.queueDef.args == nil {
+		q.queueDef.args = amqp.Table{}
+	}
+	q.queueDef.args["x-dead-letter-exchange"] = q.deadLetter.exchange
 	return nil
 }
 
