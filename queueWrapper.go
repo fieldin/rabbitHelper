@@ -353,6 +353,7 @@ func (q *QueueWrapper) setupDeadLetter() error {
 		q.queueDef.args = amqp.Table{}
 	}
 	q.queueDef.args["x-dead-letter-exchange"] = q.deadLetter.exchange
+	q.queueDef.args["x-dead-letter-routing-key"] = q.deadLetter.routing
 	return nil
 }
 
