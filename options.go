@@ -98,3 +98,14 @@ func Bind(queueName, routingKey, exchange string) Option {
 		}
 	}
 }
+
+func DeadLetter(exchange, queue, routing string) Option {
+	return func(q *QueueWrapper) {
+		q.deadLetter = deadLetterDefinitions{
+			shouldSet: true,
+			exchange:  exchange,
+			routing:   routing,
+			queue:     queue,
+		}
+	}
+}
